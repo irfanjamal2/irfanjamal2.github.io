@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="Irfan Jamal">
+    <title>Barcode Documentation</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+	<link href="css/foonav.min.css" rel="stylesheet" />
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+	<script src="js/bootstrap.bundle.min.js"></script>
+	<script src="js/foonav.js"></script>
+	<script src="https://kit.fontawesome.com/bd6d48f840.js" crossorigin="anonymous"></script>
+	<style>
+	  .modal-img {
+		  width:100%;
+		}
+	  td.bg-secondary {
+	    color: lightgray;
+	  }
+	  ol, ul {margin-left: 18px;}
+	</style>
+  </head>
+  <body>
+	<div class="container" id="content">
+      <div class="row d-grid gap-3">
+		<h1>Architecture</h1>
+		<p>There are many moving parts, but the 7 main "applications" involved in this are listed below. 
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="JDE - cloud based Oracle ERP software with API access (custom API)">
+			  <span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-cloud-sun-rain"></i></span>
+			</a>
+			<br>JDE
+		  </div>
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="Middleware - internally hosted SQL server with Jobs, Scripts, SSIS packages. Most of the scheduling happens here with Push/Pull commands from ERP to Local Server">
+		    <span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-database"></i></span>
+			</a>
+			<br>PTDCSQL01
+		  </div>
+		  
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="Local SQL database that allows for continued production and shipping even during connection outages. Many tables mirror the Middleware software.">
+		    <span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-database"></i></span>
+			</a>
+			<br>Local SQL Server
+		  </div>
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="Programmable Logic Controller - not technically a part of the WMS, but (in most mills) it feeds production data in (non-standardized)">
+		    <span style="font-size: 48px; color: lightpink;"><i class="fa-solid fa-gears"></i></span>
+			</a>
+			<br>PLC
+		  </div>
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="Label Printer - at the end of the line. Sometimes automated, sometimes manual, this prints labels for PLC produced units.">
+		    <span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-print"></i></i></span>
+			</a>
+			<br>Label Printer
+		  </div>
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="Handheld Scanners - running local code that has been somewhat standardized in function (but not code). Different for the Quebec Mills.">
+		    <span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-mobile-retro"></i></span>
+			</a>
+			<br>Handheld Scanners
+		  </div>
+		  <div class="col text-center">
+		    <a tabindex="0" role="button" class="btn" data-bs-trigger="focus" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top" data-bs-content="Barcode Desktop - local desktop application that allows for viewing, reporting, adjusting and other functions.">
+		    <span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-desktop"></i></span>
+			</a>
+			<br>Barcode Desktop
+		  </div>
+		</div>
+        <h1>Master Data Synchronization</h1>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_1_MasterData.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Requirements</strong> 
+		  <ol>
+		    <li>Various tables of master data are needed for Production, Shipping and in some cases 3rd party Weigh Scale (WeighWiz) software</li>
+			<li>Data must be kept up to date through daily extracts</li>
+		    <li>For some tables (Order Header, Order Items and Order Notes) more frequent extracts are needed as data changes more often</li>
+		  </ol>		  
+		  </p>
+		  <p><strong>Current Solution:</strong> 
+		  <ol>
+		    <li>To meet requirement #1, various JDE Orchestrations were created to allow data to be downloaded in a specific format. See the specific list of tables below.</li>
+		    <li>To keep data up to date, a Full Extract is done 3x a day to the MiddleTier server and SSIS packages then extract it to the local mill. The data is Read-Only
+			on the WMS side (maintained in JDE)</li>
+			<li>For Incremental Extracts, the middletier server is crucial as it allows for a ProcessedFlag so that SSIS packages can compare data and add, update or delete as needed</li>
+		  </ol>
+		  </p>		  
+		  <p><strong>Limitations:</strong> 
+		  <ul>
+		    <li>In rare cases, an order can be udpated while the loading/shipping is in progress. This can result in the final shipment being incorrect/out of sync</li>
+		  </ul>		  </p>
+		  <p>
+		  The following tables are extracted from JDE using customized JDE Orchestrations. The data is Read-Only on the WMS side as the data is maintained in JDE.
+		  </p>
+		  <div class="row">
+			<div class="col text-center"><a data-bs-toggle="modal" href="#CarriersMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-truck"></i></span><br>Carriers</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#CustomersMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-user-tie"></i></span><br>Customers</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#ProductsMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-box"></i></span><br>Products</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#ScaleOrdersMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-scale-unbalanced-flip"></i></span><br>Scale Orders</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#OrderHeaderMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-file-invoice"></i></span><br>Order Header</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#OrderItemsMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-chart-diagram"></i></span><br>Order Items</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#NotesMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-comments"></i></span><br>Order Notes</a></div>
+			<div class="col text-center"><a data-bs-toggle="modal" href="#ProductSubstitutionMainModal" ><span style="font-size: 48px; color: Dodgerblue;"><i class="fa-solid fa-repeat"></i></span><br>Product Substitution</a></div>
+		  </div>
+		</div>
+		<h1>Production</h1>
+		<h2>PLC Integration</h2>
+		
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_2_PLC_Table.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Requirements</strong> 
+		  <ol>
+		    <li>Ability to receive and store data from PLC in various formats (sometimes just a weight, sometimes a product code and other times a unit code)</li>
+			<li>A function to convert product attributes to a JDE product code</li>
+			<li>For some mills, a table to store WIP (Work in Progress) "Cloud" (total boards for each thickness, standard size)</li>
+			
+		  </ol>		  
+		  </p>
+		  <p><strong>Current Solution:</strong> 
+		  <ol>
+		    <li>There are 4 different tables that are currently used across various mills
+			  <ol type="a" style="margin-left: 15px;">
+			    <li><a data-bs-toggle="modal" href="#PLCProductionQueueDataModal" >PLCProductionQueue</a> - PLC looks up product data then creates an actual unit code</li>
+				<li><a data-bs-toggle="modal" href="#NBInOutEntryModal" >NBInOutEntry</a> - PLC creates a record with the product code</li>
+				<li><a data-bs-toggle="modal" href="#StaplerDataModal">StaplerData</a> - PLC create a record with product code</li>
+				<li><a data-bs-toggle="modal" href="#PLCWeightsModal" >PLCWeights</a> - PLC create a record with a weight</li>
+			  </ol>
+			  Mill specific data #TODO#<br />&nbsp;
+			</li>
+		    <li>An SQL Stored Procedure exists to convert product attributes to a finished JDE product (or an error if it finds 0 or more than 1)</li>
+			<li>A few tables are used to track the WIP "Cloud". The Production Line has data on how many "pcs" should be added to the Cloud (see math below). This amount is added
+			to the PLCWIPProducedPieces for a given thickness (product ID)
+			  <ol type="a" style="margin-left: 15px;">
+			    <li><a data-bs-toggle="modal" href="#ProductionLineModal">ProductionLine</a> - This stores how many Press Openings for a Production Line and how many panels come from a master panel (so, for example, if a line 
+		  has 14 press openings and 6 panels from a master panel, when it triggers WIP Production the total number of pieces created would be 14 * 6 = 84)</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProducedPiecesModal">PLCWIPProducedPieces</a> - This is the "Inventory" or total number of WIP for each PLCWIPProductID</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProcessLogModal">PLCWIPProcessLog</a> - An audit history of adding or removing WIP to the table above (with adjustment codes to show where it came from)</li>
+			  </ol>
+			</li>
+		  </ol>
+		  </p>		  
+		  <p><strong>Limitations:</strong> 
+		  <ul>
+		    <li>#TODO# Any?</li>
+		  </ul>		  </p>
+		</div>
+		<h2>Label Printing</h2>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_4_LabelPrint.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Requirements</strong> 
+		  <ol>
+		    <li>Ability to design and store label templates/formats (in some cases specific formats for specific products)</li>
+			<li>Ability to automate label printing (not all mills) from the PLC data</li>
+			<li>Ability to select product attributes to print a Production Label</li>
+			<li>Ability to create production without printing a label OR to print a label without creating production records</li>
+			<li>Ability to store Production data with unit codes as labels are printed</li>
+			<li>Ability to reduce WIP Inventory as labels are printed </li>
+		  </ol>		  
+		  </p>
+		  <p><strong>Current Solution:</strong> 
+		  <ol>
+		    <li>Currently ZPL (Zebra Printer Language) is used, and most products and mills have a standardized format<br>
+			JAS and Webstock products have their own label format, but all customized label template info is stored in the database (with the exception of 100DZWFCW which is hardcoded in the Label Desktop Config)</li>
+		    <li>At some mills, a desktop (Label Desktop) can be set to automated mode so it continually reads the appropriate PLC table and looks for records to consume and generate a Label</li>
+			<li>When automated mode is turned off, or for mills that do not have PLC Integration, the <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/LabelDesktop.png">Label Desktop presents users with a form</a> 
+			to select product attributes and print a label</li>
+			<li>When manually selecting attributes, the Label Desktop allows the user to create production only (no label) or create a label only (no production)</li>
+			<li>When a label is printed, either automatically or manually (with production) a <a data-bs-toggle="modal" href="#ProductionModal">Production</a> entry is created <br>
+			At this point, the production entry remains unverified and the <a data-bs-toggle="modal" href="#ProductionStatusModal">Production Status</a> is still 1</li>
+			<li>WIP is reduced based on the setup linking JDE Products to WIP Products. This is currently accomplished using a few tables:
+			  <ol type="a">
+			    <li><a data-bs-toggle="modal" href="#ProductsModal">Products</a> - in JDE WIP products are created and Finished Products are then given a WIPProductCode</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProductsModal">PLCWIPProducts</a> - on the WMS side, a unique WIPProductID links a PLCCode to the JDE WipProductCode</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPBucketsModal">PLCWIPBuckets</a> - Sometimes a product may not have a WIPProductCode so the thickness is linked to a PLCCode in this table. This only works when looking up the 
+		      PLCCode using the final Product</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProducedPiecesModal">PLCWIPProducedPieces</a> - This is the "Inventory" or total number of WIP for each PLCWIPProductID</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProcessLogModal">PLCWIPProcessLog</a> - An audit history of adding or removing WIP to the table above (with adjustment codes to show where it came from)</li>				
+			  </ol>
+			</li>
+		  </ol>
+		  </p>		  
+		  <p><strong>Limitations:</strong> 
+		  <ul>
+		    <li>#TODO# Any?</li>
+		  </ul>		  </p>
+		</div>
+		<h2>Inventory Storage</h2>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_5_Inventory.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Requirements</strong> 
+		  <ol>
+		    <li>Ability to scan units using a handheld scanning device</li>
+			<li>Ability to move units to various locations within the warehouse and track the movement</li>
+		  </ol>		  
+		  </p>
+		  <p><strong>Current Solution:</strong> 
+		  <ol>
+		    <li>Handheld devices running custom code on a Windows CE OS are currently used (physical keyboard on the device)</li>
+		    <li></li>
+			<li>When automated mode is turned off, or for mills that do not have PLC Integration, the <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/LabelDesktop.png">Label Desktop presents users with a form</a> 
+			to select product attributes and print a label</li>
+			<li>When manually selecting attributes, the Label Desktop allows the user to create production only (no label) or create a label only (no production)</li>
+			<li>When a label is printed, either automatically or manually (with production) a <a data-bs-toggle="modal" href="#ProductionModal">Production</a> entry is created <br>
+			At this point, the production entry remains unverified and the <a data-bs-toggle="modal" href="#ProductionStatusModal">Production Status</a> is still 1</li>
+			<li>WIP is reduced based on the setup linking JDE Products to WIP Products. This is currently accomplished using a few tables:
+			  <ol type="a">
+			    <li><a data-bs-toggle="modal" href="#ProductsModal">Products</a> - in JDE WIP products are created and Finished Products are then given a WIPProductCode</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProductsModal">PLCWIPProducts</a> - on the WMS side, a unique WIPProductID links a PLCCode to the JDE WipProductCode</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPBucketsModal">PLCWIPBuckets</a> - Sometimes a product may not have a WIPProductCode so the thickness is linked to a PLCCode in this table. This only works when looking up the 
+		      PLCCode using the final Product</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProducedPiecesModal">PLCWIPProducedPieces</a> - This is the "Inventory" or total number of WIP for each PLCWIPProductID</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProcessLogModal">PLCWIPProcessLog</a> - An audit history of adding or removing WIP to the table above (with adjustment codes to show where it came from)</li>				
+			  </ol>
+			</li>
+		  </ol>
+		  </p>		  
+		  <p><strong>Limitations:</strong> 
+		  <ul>
+		    <li>#TODO# Any?</li>
+		  </ul>		  </p>
+		</div>
+		<h1>Inventory Management</h1>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_6_InventoryManagement.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Requirements</strong>
+		  This is functionality for the handheld scanners
+		  <ol>
+		    <li>Ability to create a production label from a handheld device and audit user that created it</li>
+			<li>Ability to verify a production label using a handheld device (prior to putting it into inventory)</li>
+			<li>Ability to create a missing unit label by either 
+			  <ol type="a">
+			    <li>Cloning an existing label (using the unit code)</li>
+				<li>From the handheld history of units scanned (also a unit code)</li>
+				<li>Selecting product attributes</li>
+			  </ol>
+			</li>
+			<li>Ability to move inventory from one location to another</li>
+			<li>Ability to change a product on a label (i.e. invalidate the old label and print a new label with the new product code)</li>
+			<li>Ability to invalidate a label (deletes inventory)</li>
+			<li>Ability to conduct an inventory count </li>
+			<li>At some mills, the ability to do a stock transfer (a type of adjustment that moves inventory out of the mill and into the virtual reload)</li>
+		  </ol>		  
+		  </p>
+		  <p><strong>Current Solution:</strong> 
+		  <ol>
+		    <li>Handheld devices running custom code on a Windows CE OS are currently used (physical keyboard on the device)</li>
+		    <li></li>
+			<li>When automated mode is turned off, or for mills that do not have PLC Integration, the <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/LabelDesktop.png">Label Desktop presents users with a form</a> 
+			to select product attributes and print a label</li>
+			<li>When manually selecting attributes, the Label Desktop allows the user to create production only (no label) or create a label only (no production)</li>
+			<li>When a label is printed, either automatically or manually (with production) a <a data-bs-toggle="modal" href="#ProductionModal">Production</a> entry is created <br>
+			At this point, the production entry remains unverified and the <a data-bs-toggle="modal" href="#ProductionStatusModal">Production Status</a> is still 1</li>
+			<li>WIP is reduced based on the setup linking JDE Products to WIP Products. This is currently accomplished using a few tables:
+			  <ol type="a">
+			    <li><a data-bs-toggle="modal" href="#ProductsModal">Products</a> - in JDE WIP products are created and Finished Products are then given a WIPProductCode</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProductsModal">PLCWIPProducts</a> - on the WMS side, a unique WIPProductID links a PLCCode to the JDE WipProductCode</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPBucketsModal">PLCWIPBuckets</a> - Sometimes a product may not have a WIPProductCode so the thickness is linked to a PLCCode in this table. This only works when looking up the 
+		      PLCCode using the final Product</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProducedPiecesModal">PLCWIPProducedPieces</a> - This is the "Inventory" or total number of WIP for each PLCWIPProductID</li>
+				<li><a data-bs-toggle="modal" href="#PLCWIPProcessLogModal">PLCWIPProcessLog</a> - An audit history of adding or removing WIP to the table above (with adjustment codes to show where it came from)</li>				
+			  </ol>
+			</li>
+		  </ol>
+		  </p>		  
+		  <p><strong>Limitations:</strong> 
+		  <ul>
+		    <li>#TODO# Any?</li>
+		  </ul>		  </p>
+		</div>
+		<h2>Updating JDE</h2>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_7_SendDataToJDE.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		<p>Up to this point, we've downloaded master data from JDE and, contained within the barcode system, created production records, inventory records and if necessary adjustments.
+		Of all the tables and information (WIP, inventory, audit tables, PLC data, etc) only Production and Adjustments are sent to JDE.</p>
+		<p><strong>Requirements</strong>
+		  <ol>
+		    <li>Ability to transfer data to JDE in a specific format at specific intervals (so that when connection is down, transactions can continue and be transferred later)</li>
+		  </ol>
+		</p>
+		<p><strong>Current Solution:</strong>
+		  As with the master data from JDE, it first needs to get transferred to PTDCSQL01. 
+		  A job runs every 30 min (on the hour and 30 min) to move the Adjustment and Production data to PTDCSQL01 (a slightly different Production table).
+		  From there, a job runs every 30 min (on the 10 and 40 min) on PTDCSQL01 (JDE_PostProduction) to post any unprocessed Production data to JDE. 
+		  <ol>
+		    <li>Adjustment and Production Data is transfered (formatted) on the hour and 30 min to PTDCSQL01 
+			and from there a job runs on the 10 and 40 min to transfer it to JDE<br>
+			Below are 2 maps to explain the data mapping between the tables:
+			<ol type="a">
+			  <li><a data-bs-toggle="modal" href="#AdjustmentsJDEModal">Mill Adjustment > PTDCSQL01 Production Table > JDE_PostProduction</a></li>
+			  <li><a data-bs-toggle="modal" href="#ProductionJDEModal">Mill Production > PTDCSQL01 Production Table > JDE_PostProduction</a></li>
+			</ol>
+			</li>
+		  </ol>	
+		</p>
+		</div>
+		
+		<h1>Shipping</h1>
+		
+		<h2>Scalehouse</h2>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_8_Gatehouse.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		<p>The scalehouse system (LIMS and WeighWiz) function independently of the barcode system and provide 
+		other functionality (receipt of raw materials, etc). It is likely that integration with this software will remain.</p>
+		<p><strong>Requirements</strong>
+		  <ol>
+		    <li>Ability to store scale order data in a format required by LIMS</li>
+			<li>Ability to receive scale ticket data from LIMS</li>
+			<li>Ability to track when a shipment is closed (to update the scale ticket data)</li>
+		  </ol>
+		</p>
+		<p><strong>Current Solution:</strong>
+		  <ol>
+		    <li>ScaleOrders (a table of order/shipment data in a specific format) are extracted from JDE (LIMS pulls this data as needed)</li>
+			<li>As a truck enters the scalehouse, and provides a valid order/shipment, scale ticket data is created in the local SQL Server and a scale ticket prints in the loading area</li>
+			<li>After the shipment is loaded, the truck is weighed on the way out and the scale ticket data is updated</li>
+		  </ol>	
+		</p>
+		</div>
+		
+		<h2>Loading a Shipment</h2>
+		<div class="row d-flex align-items-center p-2">
+		  <div class="col text-center">
+		    <img src="images/Doc_9_ShippingFlow.png" />
+		  </div>
+		</div>
+		<div class="row d-flex align-items-center bg-light border p-2">
+		<p><strong>Requirements</strong>
+		  <ol>
+		    <li>Ability to "create" a barcode shipment by entering either Order # or Shipment #</li>
+			<li>Ability to open a shipment after it's been created using either the BOL or the Order and Shipment #</li>
+			<li>Ability to cancel a shipment if it has no units left on it</li>
+			<li>Ability to manually enter (or scan) required truck/railcar info (weight, truck and trailer, railcar number, carrier, etc)</li>
+			<li>Ability to load (either by scanning or entering manually): 
+			  <ol type="A">
+			    <li>items on the order (standard practice)</li>
+			    <li>items with a hot flag (override required)</li>
+			    <li>substitute items (table of substitutes maintained - override required)</li>
+			    <li>items that aren't in inventory (requires an option to create the inventory record first)</li>
+			  </ol></li>
+			<li>Ability to remove units from a shipment</li>
+			<li>Ability to view: 
+			  <ol type="A">
+			    <li>order notes, properties and details</li>
+			    <li>units loaded so far</li>
+			    <li>hot units loaded</li>
+			    <li>details/properties of a specific unit (attributes)</li>
+			  </ol></li>
+			<li>Logic to ensure mandatory truck (truck and trailer #) or railcar info (car and seal number) are entered before closing a shipment</li>
+			<li>Logic to ensure the user confirms the unit count before completing a shipment</li>
+			<li>Ability to close a shipment (and automatically print a BOL locally)</li>
+			<li>Ability to re-print a BOL of a closed shipment</li>
+			<li>Ability to receive a shipment (and all units) back into inventory</li>
+		  </ol>
+		</p>
+		<p><strong>Current Solution:</strong>
+		  <ol>
+		    <li>From the 
+			  <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/mainShipmentScreen.png">main shipment screen</a>
+			  on the barcode handheld, users can choose "Create a Shipment" which then prompts them to choose Rail/Truck shipment and then enter
+			  an order or shipment # on the <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/createShipment.png">next screen</a><br>
+			  This creates a barcode shipment record in the local database (not to be confused with the order/shipment from the ERP)
+			</li>
+			<li>If loading is discontinued, or the user logs off, anyone can re-open the barcode shipment again to continue the loading process<br>
+			#TODO - can multiple people load units at the same time?</li>
+			<li>Sometimes, barcode shipments need to be canceled (#TODO why). For this option to be selected, all units must be removed from the shipment (and put back into inventory)</li>
+			<li>When creating the barcode shipment, only an Order/Shipment # are mandatory, but other information can be entered (or scanned from a scale ticket)</li>
+			<li>Once a shipment is created, units can be loaded in the following way:
+			 <ol type="A">
+			    <li>if a scanned unit matches the item, and has no hot flag, it is loaded with no prompts</li>
+			    <li>if the unit matches but has a hot flag, it requires an override to load (#TODO - scenarios)</li>
+			    <li>if a substitute unit is going to be loaded, the user must first 
+				  <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/overrideItem.png">select an override</a> and reason 
+				  (only valid substitute products maintained in a separate table can be loaded)</li>
+			    <li>if a scanned unit isn't in inventory, or has a damaged label, users can easily (from the Shipment screen) select "Unit Maintenance" or "Unit Putaway" to 
+				quickly re-print a label or put a unit into inventory if something went wrong</li>
+			  </ol></li>
+			<li>Selecting "Remove Units from Shipment" allows the user to scan a unit and have it removed and added back to inventory</li>
+			<li>At any time from the shipment loading screen, users can  
+			  <ol type="A">
+			    <li>view order notes, properties and details</li>
+			    <li>view a list of units loaded so far against each item</li>
+			    <li>view a list of only hot units loaded (if any)</li>
+			    <li>view details/properties of a specific unit</li>
+			  </ol></li>
+			<li>before completing a shipment, a user is prompted for <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/additionalInfo.png">additional information</a> 
+			  for either truck (truck and trailer #) or rail shipments (car and seal #)</li>
+			<li>Before completing a shipment, the user must <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/confirmUnitCount.png">confirm the number of units loaded</a> 
+			  (due to the nature of the business, the number of units may not match the order amount, so this is a comparison of what was physically loaded to what the system shows as loaded)</li>
+			<li>Once the units are confirmed, and all additional information has been entered, the user can "Complete the shipment" which prints a BOL (locally)</li>
+			<li>If necessary, users can select "Re-print a BOL" and enter the BOL # or Order/Shipment combination to reprint the original BOL</li>
+			<li>If necessary, a shipment can be received back into inventory - this takes all units off the shipment and puts them back into inventory</li>
+		  </ol>	
+		</p>
+		</div>
+		
+      </div>
+    </div>
+
+	
+
+<!-- end -->
+
+
+
+
+
+
+	<!-- MODALS BELOW HERE -->
+	
+	<!-- new modals -->
+	
+	<div class="modal fade" id="CarriersMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Carriers</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> Carriers</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractCarriers</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#carrierAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadCarriers)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#carrierDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="CustomersMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Customers</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> CustomerMaster</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractCustomers</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#customerAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadCustomers)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#customerDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="ProductsMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Products</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> Products</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractProducts</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#productsAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadProducts)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#productsDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="ScaleOrdersMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Scale Orders</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> ScaleOrders</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractScaleOrders</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#scaleAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadScaleOrders)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#scaleDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="OrderHeaderMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Order Header</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> OrderHeader</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractOrderHeader</p>
+		  <p><strong>Incremental API:</strong> WF_ORCH_JDE_NortrackExtractOrderHeaderINC</p>
+		  <p><strong>Incremental Logic:</strong> #TODO#</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#ordersAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadOrderHeader)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#ordersDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="OrderItemsMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Order Items</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> OrderShipmentDetails</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractOrderShipmentDetails</p>
+		  <p><strong>Incremental API:</strong> WF_ORCH_JDE_NortrackExtractOrderShipmentDetailsINC</p>
+		  <p><strong>Incremental Logic:</strong> #TODO#</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#orderitemsAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadOrderShipmentDetails)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#orderitemsDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="NotesMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Notes</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> Notes</p>
+		  <p><strong>API Name:</strong> WF_ORCH_JDE_NortrackExtractNotes</p>
+		  <p><strong>Incremental API:</strong> WF_ORCH_JDE_NortrackExtractNotesINC</p>
+		  <p><strong>Incremental Logic:</strong> #TODO#</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#notesAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadNotes)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#notesDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+<div class="modal fade" id="ProductSubstitutionMainModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="staticBackdropLabel">Product Substitution</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">
+		<div class="row d-flex align-items-center bg-light border p-2">
+		  <p><strong>Table:</strong> ProductXref</p>
+		  <p><strong>API Name:</strong> WF_ORCH_BarcodeSubstitutionExtract</p>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#substituteAPIModal"><span style="font-size: 48px; color: Tomato;"><i class="fa-solid fa-microchip"></i></span></button>
+			API Logic
+		  </div>
+		  <div class="col-4 text-center">
+		  <span style="font-size: 48px; color: Black;"><i class="fa-solid fa-arrow-right"></i></span>
+		  <br>
+		  Pull (initiated by JDE_FullExtract > JDE_LoadProductSubstitution)
+		  </div>
+		  <div class="col-4 text-center">
+		    <button type="button" class="btn" data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#substituteDataModal"><span style="font-size: 48px; color: Mediumslateblue;"><i class="fa-solid fa-bars-progress"></i></span></button>
+			Data Map
+		  </div>
+		</div>
+		</div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div></div></div></div>
+	
+	
+	
+	
+	<div class="modal fade" id="carrierAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Carrier Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="carrierDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Carrier Data - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (Carriers)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td></td><td>SQL row_number()</td><td>CarrierID</td><td>1</td></tr>
+            <tr><td>CarrierID</td><td></td><td>Code</td><td>75</td></tr>
+            <tr><td>Alpha Name</td><td></td><td>Name</td><td>CAN-AM WEST CARRIERS</td></tr>
+            <tr><td></td><td>Not used (always NULL)</td><td>SCAC</td><td>NULL</td></tr>
+            <tr><td>Type</td><td></td><td>Type</td><td>TC</td></tr>
+            <tr><td>TypeDesc</td><td></td><td>TypeDesc</td><td>Transportation Carriers</td></tr>
+            <tr><td>Address1</td><td></td><td>Address1</td><td>BOX 3200</td></tr>
+            <tr><td>Address2</td><td></td><td>Address2</td><td>400 RIVERSIDE ROAD</td></tr>
+            <tr><td>City</td><td></td><td>City</td><td>ABBOTSFORD</td></tr>
+            <tr><td>ProvinceState</td><td></td><td>ProvienceState</td><td>BC</td></tr>
+            <tr><td>PostalCode</td><td></td><td>PostalCode</td><td>V2S 4P4</td></tr>
+            <tr><td></td><td>Not used</td><td>NIRNum</td><td>NULL</td></tr>
+            <tr><td></td><td>Not used</td><td>active</td><td>NULL</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="customerAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Customer Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="customerDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Customer Data - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (CustomerMaster)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>auto incremented</td><td></td><td>CustID</td><td>4787399</td></tr>
+            <tr><td>CustID</td><td>This is the JDE field</td><td>CustomerID</td><td>1106</td></tr>
+            <tr><td>CustomerName</td><td></td><td>CustomerName</td><td>SEEMAC INC-C</td></tr>
+            <tr><td>Address1</td><td></td><td>Address1</td><td>#450 - 11350 N. MERIDIAN</td></tr>
+            <tr><td>Address2</td><td></td><td>Address2</td><td></td></tr>
+            <tr><td>Address3</td><td></td><td>Address3</td><td></td></tr>
+            <tr><td>City</td><td></td><td>City</td><td>CARMEL</td></tr>
+            <tr><td>StateOrProvinceCode</td><td></td><td>StateOrProvinceCode</td><td>IN</td></tr>
+            <tr><td>PostalCode</td><td></td><td>PostalCode</td><td>46032-4528</td></tr>
+            <tr><td>CountryCode</td><td></td><td>CountryCode</td><td>USA</td></tr>
+            <tr><td></td><td>Not used</td><td>MasterCustomerFlag</td><td>NULL</td></tr>
+            <tr><td>Default to 0</td><td></td><td>ProcessedFlag</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="notesAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Order Notes Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="notesDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Notes Data - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (Notes)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>NoteID</td><td></td><td>NoteID</td><td>45061</td></tr>
+            <tr><td>Document_ID</td><td></td><td>Document_ID</td><td>XO</td></tr>
+            <tr><td>NorbordSalesOrderNumber</td><td></td><td>NorbordSalesOrderNumber</td><td>30455547</td></tr>
+            <tr><td>BillLadingNotes</td><td></td><td>BillLadingNotes</td><td>1</td></tr>
+            <tr><td></td><td></td><td>NoteType</td><td>NULL</td></tr>
+            <tr><td>NoteText</td><td></td><td>NoteText</td><td>1 CAR PER MONTH</td></tr>
+            <tr><td>defaulted to 0</td><td></td><td>ProcessedFlag</td><td>1</td></tr>
+            <tr><td>GETDATE()</td><td>CreatedDate</td><td>11/21/24 6:10 PM</td></tr>
+            <tr><td>GETDATE() converted to PST</td><td>CreatedDatePST</td><td>11/21/24 3:10 PM</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div class="modal fade" id="orderitemsAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Order Item Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="orderitemsDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Order Item Data - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (OrderShipmentDetails)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+			<tr><td></td><td> </td><td>DetailID</td><td>13634955</td></tr>
+			<tr><td>NorbordSalesOrderNumberr</td><td> </td><td>NorbordSalesOrderNumber</td><td>30779141</td></tr>
+			<tr><td>SalesOrderLineNumber</td><td> </td><td>SalesOrderLineNumber</td><td>1</td></tr>
+			<tr><td>CustomerOrMasterID</td><td> </td><td>CustomerOrMasterID</td><td>770283</td></tr>
+			<tr><td>NorbordShipmentNumber</td><td> </td><td>NorbordShipmentNumber</td><td>10751928</td></tr>
+			<tr><td>ShipToNumber</td><td> </td><td>ShipToNumber</td><td>1</td></tr>
+			<tr><td>MillCode</td><td> </td><td>MillCode</td><td>83</td></tr>
+			<tr><td>ProductCode</td><td> </td><td>ProductCode</td><td>1362238</td></tr>
+			<tr><td>ProductDescription</td><td> </td><td>ProductDescription</td><td>7/16 CAT Trubord</td></tr>
+			<tr><td>LiftsOrdered</td><td> </td><td>LiftsOrdered</td><td>14</td></tr>
+			<tr><td>PiecesOrdered</td><td> </td><td>PiecesOrdered</td><td>952</td></tr>
+			<tr><td>code1</td><td> </td><td>code1</td><td>S</td></tr>
+			<tr><td>code1Description</td><td> </td><td>code1Description</td><td>SE</td></tr>
+			<tr><td>code2</td><td> </td><td>code2</td><td>A                   </td></tr>
+			<tr><td>code2Description</td><td> </td><td>code2Description</td><td>APA                                     </td></tr>
+			<tr><td>code3</td><td> </td><td>code3</td><td>0716</td></tr>
+			<tr><td>code3Description</td><td> </td><td>code3Description</td><td>7/16</td></tr>
+			<tr><td>code4</td><td> </td><td>code4</td><td> </td></tr>
+			<tr><td>code4Description</td><td> </td><td>code4Description</td><td> </td></tr>
+			<tr><td>code5</td><td> </td><td>code5</td><td> </td></tr>
+			<tr><td>code5Description</td><td> </td><td>code5Description</td><td> </td></tr>
+			<tr><td>ItemDesc1</td><td> </td><td>ItemDesc1</td><td>48</td></tr>
+			<tr><td>ItemDesc2</td><td> </td><td>ItemDesc2</td><td>96</td></tr>
+			<tr><td>ItemDesc3</td><td> </td><td>ItemDesc3</td><td>68</td></tr>
+			<tr><td>HotBoard</td><td>#TODO# what does this represent always 0</td><td>HotBoard</td><td>0</td></tr>
+			<tr><td>HotBoardFlag</td><td>#TODO# what does this represent</td><td>HotBoardFlag</td><td>YES</td></tr>
+			<tr><td>Marks</td><td> </td><td>Marks</td><td>               </td></tr>
+			<tr><td></td><td>default to 0 #TODO# when does it become 1</td><td>ProcessedFlag</td><td>1</td></tr>
+			<tr><td></td><td>GETDATE()</td><td>CreatedDate</td><td>11/21/24 12:10 PM</td></tr>
+			<tr><td></td><td>convert GETDATE() to PST</td><td>CreatedDatePST</td><td>11/21/24 9:10 AM</td></tr>
+			<tr><td>IsShipmentProduct</td><td> </td><td>IsShipmentProduct</td><td>1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="ordersAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Order Header Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="ordersDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Order Header Data - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (OrderHeader)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+			<tr><td></td><td>Auto Increment</td><td>HeaderID</td><td>8074672</td></tr>
+			<tr><td>NorbordSalesOrderNumber</td><td> </td><td>NorbordSalesOrderNumber</td><td>268047</td></tr>
+			<tr><td>CustomerOrMasterID</td><td> </td><td>CustomerOrMasterID</td><td>1048804</td></tr>
+			<tr><td>CustomerPONumber</td><td> </td><td>CustomerPONumber</td><td>TRN2499771</td></tr>
+			<tr><td>OrderDate</td><td> </td><td>OrderDate</td><td>2/6/2024</td></tr>
+			<tr><td>RequestedShipWeek</td><td> </td><td>RequestedShipWeek</td><td>11/18/2024</td></tr>
+			<tr><td>ScheduledShipDate</td><td>Seems unused? Always 1/1/1900</td><td>ScheduledShipDate</td><td>1/1/1900</td></tr>
+			<tr><td>Mode</td><td> </td><td>Mode</td><td>RAIL</td></tr>
+			<tr><td>RoutingDescription</td><td> </td><td>RoutingDescription</td><td> </td></tr>
+			<tr><td>CarrierDescription</td><td> </td><td>CarrierDescription</td><td>CANADIAN NATIONAL</td></tr>
+			<tr><td>FreightTermsDescription,</td><td> </td><td>FreightTermsDescription,</td><td>Prepaid</td></tr>
+			<tr><td>NorbordShipmentNumber</td><td> </td><td>NorbordShipmentNumber</td><td>10747736</td></tr>
+			<tr><td>MillName</td><td> </td><td>MillName</td><td>NI-LA SARRE</td></tr>
+			<tr><td>MillCode</td><td> </td><td>MillCode</td><td>76</td></tr>
+			<tr><td>LineUpDateFlag</td><td> </td><td>LineUpDateFlag</td><td> </td></tr>
+			<tr><td>ShipToNumber</td><td> </td><td>ShipToNumber</td><td>1</td></tr>
+			<tr><td>ShipToName</td><td> </td><td>ShipToName</td><td>NSI-LAKE SUPERIOR WAREHOUSING CO</td></tr>
+			<tr><td>ShipToAddressLine1</td><td> </td><td>ShipToAddressLine1</td><td>1222 PORT TERMINAL DRIVE</td></tr>
+			<tr><td>ShipToAddressLine2</td><td> </td><td>ShipToAddressLine2</td><td> </td></tr>
+			<tr><td>ShipToAddressLine3</td><td> </td><td>ShipToAddressLine3</td><td> </td></tr>
+			<tr><td>ShipToCity</td><td> </td><td>ShipToCity</td><td>DULUTH</td></tr>
+			<tr><td>ShipToStateOrProvinceCode,</td><td> </td><td>ShipToStateOrProvinceCode,</td><td>MN</td></tr>
+			<tr><td>ShipToStateOrProvinceDescription</td><td> </td><td>ShipToStateOrProvinceDescription</td><td>Minnesota</td></tr>
+			<tr><td>ShipToPostalCode</td><td> </td><td>ShipToPostalCode</td><td>55802</td></tr>
+			<tr><td>ShipToCountryCode</td><td> </td><td>ShipToCountryCode</td><td>USA</td></tr>
+			<tr><td>ShipToCountryDescription</td><td> </td><td>ShipToCountryDescription</td><td>UNITED STATES</td></tr>
+			<tr><td>ShipToPO</td><td> </td><td>ShipToPO</td><td> </td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td>OrderType</td><td> </td><td>OrderType</td><td>XT</td></tr>
+			<tr><td>LoadID</td><td> </td><td>LoadID</td><td>0</td></tr>
+			<tr><td>Distance</td><td> </td><td>Distance</td><td>0</td></tr>
+			<tr><td>IRSNum</td><td> </td><td>IRSNum</td><td>98-1272142</td></tr>
+			<tr><td>ShipToPhoneNum</td><td> </td><td>ShipToPhoneNum</td><td>1800-387-1740</td></tr>
+			<tr><td>RailContractNum</td><td> </td><td>RailContractNum</td><td> </td></tr>
+			<tr><td>UnitRef</td><td> </td><td>UnitRef</td><td>60 Boxca</td></tr>
+			<tr><td>ShipViaCode</td><td> </td><td>ShipViaCode</td><td>R</td></tr>
+			<tr><td>OrderReleasedFlag</td><td> </td><td>OrderReleasedFlag</td><td>YES</td></tr>
+			<tr><td>ListOfShipmentNum</td><td> </td><td>ListOfShipmentNum</td><td>                                                                                                    </td></tr>
+			<tr><td>DestinationLocation</td><td> </td><td>DestinationLocation</td><td> </td></tr>
+			<tr><td>ShipToContact</td><td> </td><td>ShipToContact</td><td> </td></tr>
+			<tr><td>CreditHold</td><td> </td><td>CreditHold</td><td>NO </td></tr>
+			<tr><td>JobSite</td><td> </td><td>JobSite</td><td> </td></tr>
+			<tr><td></td><td>Not used</td><td> </td><td>NULL</td></tr>
+			<tr><td>RoutedYesNo</td><td> </td><td>RoutedYesNo</td><td>   </td></tr>
+			<tr><td>MaxWeight</td><td> </td><td>MaxWeight</td><td>0</td></tr>
+			<tr><td>BlockOrder</td><td> </td><td>BlockOrder</td><td>NO </td></tr>
+			<tr><td></td><td>default to 0</td><td>ProcessedFlag</td><td>1</td></tr>
+			<tr><td></td><td>default to 0</td><td>DeleteFlag</td><td>0</td></tr>
+			<tr><td></td><td>GETDATE()</td><td>CreatedDate</td><td>11/21/2024 12:10</td></tr>
+			<tr><td></td><td>use GETDATE() but convert to PST</td><td>CreatedDatePST</td><td>11/21/2024 9:10</td></tr>
+			<tr><td></td><td>GETDATE()</td><td>ModifiedDate</td><td>11/21/2024 12:10</td></tr>
+			<tr><td></td><td>default to 1</td><td>InProgress</td><td>1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="scaleAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Scalehouse Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="scaleDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Scalehouse - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (Products)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+			<tr><td>PrimaryKey</td><td> </td><td>PrimaryKey</td><td>1</td></tr>
+			<tr><td>OrdNum</td><td> </td><td>OrdNum</td><td>30779143</td></tr>
+			<tr><td></td><td>OrdNum + ShpNum (left fill each one with 0s to make 8 chars each)</td><td>PickupNum</td><td>3077914310752185</td></tr>
+			<tr><td>PickupNum</td><td>Not used</td><td> </td><td></td></tr>
+			<tr><td>ShpNum</td><td> </td><td>ShpNum</td><td>10752185</td></tr>
+			<tr><td>CustPO</td><td> </td><td>CustPO</td><td>CHS118270</td></tr>
+			<tr><td>Loc</td><td> </td><td>Loc</td><td>83</td></tr>
+			<tr><td>CustName</td><td> </td><td>CustName</td><td>US LBM-PROFESSIONAL BUILDERS-C</td></tr>
+			<tr><td>Carrier Number</td><td> </td><td>Vendor</td><td>524847</td></tr>
+			<tr><td></td><td>get Carrier name from Carrier table</td><td>CarrierName</td><td>WALL TIMBER COMPANY, LLC-TC</td></tr>
+			<tr><td>LineUpDate</td><td>if null, use today</td><td>LineUpDate</td><td>11/21/2024</td></tr>
+			<tr><td>Mod Trn</td><td> </td><td>ERMS</td><td>T</td></tr>
+			<tr><td>CreateDate</td><td>not used…use GetDate()</td><td>CreateDate</td><td>11/21/24 1:10 PM</td></tr>
+			<tr><td>ShipVia</td><td> </td><td>ShipVia</td><td>T</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="productsAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Product/Item Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Sample</th>
+              <th>JDE Location</th>
+            </tr>
+          </thead>
+          <tbody>
+		    <tr><td>ProductID</td><td>31</td><td>Unique table ID (refreshes every time a full extract is done)</td></tr>
+<tr><td>ProductTypeCode</td><td>OS</td><td>Hardcoded by the API?</td></tr>
+<tr><td>ProductTypeDscr</td><td>ORIENTED STRAND BOARD                   </td><td>Hardcoded by the API?</td></tr>
+<tr><td>ProductCode</td><td>1362000</td><td>JDE Item Number</td></tr>
+<tr><td>ProductDscr</td><td>1/2 CAT Trubord                                                                                                         </td><td>Description 1</td></tr>
+<tr><td>LocationCode</td><td>91</td><td>From Item Branch Master , lookup Branch/Plant to get location code #TODO#</td></tr>
+<tr><td>WidthCode</td><td>48</td><td>This is the description of Cat Code 7 (from Item Master). User Defined Codes (Product Code = "41", User Defined Code = "07")</td></tr>
+<tr><td>LengthCode</td><td>96</td><td>This is the description of Cat Code 8 (from Item Master). User Defined Codes (Product Code = "41", User Defined Code = "08")</td></tr>
+<tr><td>PiecesPerPackage</td><td>58</td><td>This is the description of Cat Code 9 (from Item Master). User Defined Codes (Product Code = "41", User Defined Code = "09")</td></tr>
+<tr><td>EstimatedWeight</td><td>57</td><td>From Item Branch Master, look up UOM and find the conversion from 1PC to LBs</td></tr>
+<tr><td>ProductQuota</td><td>N  </td><td>Always No</td></tr>
+<tr><td>ConstructionCode</td><td>S                   </td><td>Sales Code 4</td></tr>
+<tr><td>ConstructionDscr</td><td>SE                                 </td><td>Description of Sales Code 4. User Defined Codes (Product Code = "41", User Defined Code = "S4")</td></tr>
+<tr><td>GradeCode</td><td>A                   </td><td>Additional Product Info > Grade Code</td></tr>
+<tr><td>GradeDscr</td><td>APA                                     </td><td>Description of Grade Code. User Defined Codes (Product Code = "40", User Defined Code = "LG")</td></tr>
+<tr><td>ThicknessCode</td><td>0102</td><td>Cat Code 6 of Item Master</td></tr>
+<tr><td>ThicknessDscr</td><td>1/2</td><td>This is the description of Cat Code 6 (from Item Master). User Defined Codes (Product Code = "41", User Defined Code = "06")</td></tr>
+<tr><td>FinishCode</td><td>                    </td><td>Always Blank</td></tr>
+<tr><td>FinishDscr</td><td>                                   </td><td>Always Blank</td></tr>
+<tr><td>GroupCode</td><td>                    </td><td>Purchase Code 3</td></tr>
+<tr><td>GroupDscr</td><td>Blank                                   </td><td>Description of Purchase Code 3 (from Item Master). User Defined Codes (Product Code = "41", User Defined Code = "P3")</td></tr>
+<tr><td>VolumeUnitCode</td><td>M6  </td><td>Unit of Measure - Pricing</td></tr>
+<tr><td>VolumeUnitDscr</td><td>M16                                </td><td>Unit of Measure - Pricing</td></tr>
+<tr><td>Thickness_Width_UOM</td><td>IN  </td><td>Can't find this outside of descriptions</td></tr>
+<tr><td>Domestic_HarmonizedCode</td><td>4410120010</td><td>Same for all? #TODO# source?</td></tr>
+<tr><td>PriceClass</td><td>OSB     </td><td></td></tr>
+<tr><td>FreightClass</td><td>OSB   </td><td></td></tr>
+<tr><td>ProductCateCode</td><td>SS      </td><td>Sales Code 2</td></tr>
+<tr><td>ProductCateDscr</td><td>SHEATHING                          </td><td>Description of Sales Code 2. User Defined Codes (Product Code = "41", User Defined Code = "S2")</td></tr>
+<tr><td>UPC</td><td></td><td>From Item X Reference (if it exists), X Ref Type = "UP" and this value is from "Cross Reference Item Number"</td></tr>
+<tr><td>GTIN</td><td> </td><td>From Item X Reference (if it exists), X Ref Type = "UP" and this value is from "Cross Reference Item Number"</td></tr>
+<tr><td>ActiveProduct</td><td>Y </td><td>What does O mean? #TODO#</td></tr>
+<tr><td>UniqueCode</td><td>1362000</td><td>Same as Product Code</td></tr>
+<tr><td>AreaSQM</td><td>32</td><td>From Item Branch Master, look up UOM and find the conversion from 1PC to SF</td></tr>
+<tr><td>VolumeM16</td><td>0.2559997</td><td>From Item Branch Master, look up UOM and find the conversion from 1PC to M6</td></tr>
+<tr><td>VolumeCBM</td><td>0.0377558</td><td>From Item Branch Master, look up UOM and find the conversion from 1PC to CBM</td></tr>
+<tr><td>WIPProductCode</td><td>1384000</td><td></td></tr>
+<tr><td>LabelThickness</td><td>            </td><td>Always Blank</td></tr>
+<tr><td>HotBoardFlag</td><td>YES</td><td>#TODO# where does this come from?</td></tr>
+<tr><td>WidthNom</td><td>IN  </td><td></td></tr>
+<tr><td>LengthNom</td><td>IN  </td><td></td></tr>
+<tr><td>WipFlag</td><td>0</td><td></td></tr>
+</tbody>
+</table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="productsDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Customer Data - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (Products)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+			<tr><td></td><td>Auto Increment ID</td><td>ProductID</td><td>1</td></tr>
+			<tr><td>ProductTypeCode</td><td> </td><td>ProductTypeCode</td><td>OS</td></tr>
+			<tr><td>ProductTypeDscr</td><td> </td><td>ProductTypeDscr</td><td>ORIENTED STRAND BOARD                   </td></tr>
+			<tr><td>ProductCode</td><td> </td><td>ProductCode</td><td>1359201</td></tr>
+			<tr><td>ProductDscr</td><td> </td><td>ProductDscr</td><td>11.0MM Sheathing JAS                                                                                                    </td></tr>
+			<tr><td>LocationCode</td><td> </td><td>LocationCode</td><td>35</td></tr>
+			<tr><td>SRP7 Description</td><td> </td><td>WidthCode</td><td>910MM   </td></tr>
+			<tr><td>SRP8 Description</td><td> </td><td>LengthCode</td><td>1820MM  </td></tr>
+			<tr><td>PiecesPerPackage</td><td> </td><td>PiecesPerPackage</td><td>80</td></tr>
+			<tr><td>EstimatedWeight</td><td> </td><td>EstimatedWeight</td><td>26.8</td></tr>
+			<tr><td>ProductQuota</td><td> </td><td>ProductQuota</td><td>N  </td></tr>
+			<tr><td>ConstructionCode</td><td> </td><td>ConstructionCode</td><td>S                   </td></tr>
+			<tr><td>ConstructionDscr</td><td> </td><td>ConstructionDscr</td><td>SE                                 </td></tr>
+			<tr><td>GradeCode</td><td> </td><td>GradeCode</td><td>J                   </td></tr>
+			<tr><td>GradeDscr</td><td> </td><td>GradeDscr</td><td>JAS                                     </td></tr>
+			<tr><td>ThicknessCode</td><td> </td><td>ThicknessCode</td><td>M110                </td></tr>
+			<tr><td>ThicknessDscr</td><td> </td><td>ThicknessDscr</td><td>11.0MM                             </td></tr>
+			<tr><td>FinishCode</td><td> </td><td>FinishCode</td><td>                    </td></tr>
+			<tr><td>FinishDscr</td><td> </td><td>FinishDscr</td><td>                                   </td></tr>
+			<tr><td>GroupCode</td><td> </td><td>GroupCode</td><td>P                   </td></tr>
+			<tr><td>GroupDscr</td><td> </td><td>GroupDscr</td><td>PEFC                                    </td></tr>
+			<tr><td>VolumeUnitCode</td><td> </td><td>VolumeUnitCode</td><td>M3  </td></tr>
+			<tr><td>VolumeUnitDscr</td><td> </td><td>VolumeUnitDscr</td><td>M3                                 </td></tr>
+			<tr><td>Thickness_Width_UOM</td><td> </td><td>Thickness_Width_UOM</td><td>MM  </td></tr>
+			<tr><td>Domestic_HarmonizedCode</td><td> </td><td>Domestic_HarmonizedCode</td><td>4410120010</td></tr>
+			<tr><td>PriceClass</td><td> </td><td>PriceClass</td><td>OSB     </td></tr>
+			<tr><td>FreightClass</td><td> </td><td>FreightClass</td><td>OSB   </td></tr>
+			<tr><td>ProductCateCode</td><td> </td><td>ProductCateCode</td><td>SS      </td></tr>
+			<tr><td>ProductCateDscr</td><td> </td><td>ProductCateDscr</td><td>SHEATHING                          </td></tr>
+			<tr><td></td><td> </td><td>NomWidth</td><td>NULL</td></tr>
+			<tr><td>UPC</td><td> </td><td>UPC</td><td></td></tr>
+			<tr><td>GTIN</td><td> </td><td>GTIN</td><td> </td></tr>
+			<tr><td>ActiveProduct</td><td> </td><td>ActiveProduct</td><td>Y </td></tr>
+			<tr><td>UniqueCode</td><td> </td><td>UniqueCode</td><td>1359201</td></tr>
+			<tr><td>AreaSQM</td><td> </td><td>AreaSQM</td><td>17.8271884</td></tr>
+			<tr><td>VolumeM16</td><td> </td><td>VolumeM16</td><td>0.1235269</td></tr>
+			<tr><td>VolumeCBM</td><td> </td><td>VolumeCBM</td><td>0.0182182</td></tr>
+			<tr><td>WIPProductCode</td><td> </td><td>WIPProductCode</td><td>            </td></tr>
+			<tr><td>LabelThickness</td><td> </td><td>LabelThickness</td><td>            </td></tr>
+			<tr><td>HotBoardFlag</td><td> </td><td>HotBoardFlag</td><td>NO </td></tr>
+			<tr><td>WidthNom</td><td> </td><td>WidthNom</td><td>IN  </td></tr>
+			<tr><td>LengthNom</td><td> </td><td>LengthNom</td><td>IN  </td></tr>
+			<tr><td>WipFlag</td><td> </td><td>WipFlag</td><td>0</td></tr>
+			<tr><td>ProcessedFlag</td><td>API has this field but we default to 0</td><td>ProcessedFlag</td><td>1</td></tr>
+			<tr><td></td><td>GETDATE()</td><td>CreatedDate</td><td>11/21/24 12:10 PM</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div class="modal fade" id="substituteAPIModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Product Substitute Data - API Logic</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>#TODO#</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="substituteDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Product Substitution - API to PTDCSQL01</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>API Field</th>
+              <th>Logic</th>
+              <th>PTDCSQL01 Field (ProductXref)</th>
+              <th>Sample Data</th>
+            </tr>
+          </thead>
+          <tbody>
+			<tr><td>Item Number</td><td>Item on shipment</td><td>Productcode</td><td>1363150</td></tr>
+			<tr><td>Item Description</td><td> </td><td>ProductDscr</td><td>3/8 StableWall S1S PB</td></tr>
+			<tr><td>Substitute Item Number</td><td>Item that can be shipped INSTEAD</td><td>SubstituteProductcode</td><td>1363151</td></tr>
+			<tr><td>Substitute Description  1</td><td> </td><td>SubstituteDscr1</td><td>3/8 StableWall S1S</td></tr>
+			<tr><td>Substitute Description  2</td><td> </td><td>SubstituteDscr2</td><td>OSB, 48 x 96</td></tr>
+			<tr><td></td><td>GETDATE()</td><td>CreatedDate</td><td>11/21/24 12:10 PM</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="PLCProductionQueueDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCProductionQueue</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Notes</th>
+              <th>Jefferson</th>
+              <th>Alabama (Huguley)</th>
+            </tr>
+          </thead>
+          <tbody>
+			<tr><td>PLCProductionQueueID</td><td>unique table ID</td><td>917809</td><td>1182158</td></tr>
+			<tr><td>UnitCode</td><td>unique unit label ID</td><td>921202408221141641</td><td>901202411221214730</td></tr>
+			<tr><td>QueuedDate</td><td>data this was added</td><td>8/22/24 9:16 AM</td><td>11/22/24 4:47 PM</td></tr>
+			<tr><td>FinishingLineID</td><td>which finishing line created it (only 1 record in this table per finishing line)</td><td>1</td><td>1</td></tr>
+			<tr><td>OutFeed</td><td>?</td><td>1</td><td>1</td></tr>
+		  </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="PLCProductionQueueEventLogDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCProductionQueueEventLog</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+	    <p>As records are processed from the PLCProductionQueue, an event log is maintained</p>
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>PLCProductionQueueEventLogID</th><th>EventLogDate</th><th>ProductionLineID</th><th>OutFeed</th><th>ApplicationModule</th><th>UnitCode</th><th>Message</th></tr>
+          </thead>
+          <tbody>
+			<tr><td>414849</td><td>00:44.2</td><td>1</td><td>1</td><td>InsertUnit                         </td><td>921202001012060044</td><td>UnitCode created by PLC/Historian for PLCCode [1532BCES_48_96].</td></tr>
+			<tr><td>414850</td><td>00:48.0</td><td>1</td><td>1</td><td>PLCProduction_RemovePrintedUnitCode</td><td>921202001012060044</td><td>UnitCode has been printed and removed from PLCProductionQueue.</td></tr>
+			<tr><td>414851</td><td>02:40.8</td><td>1</td><td>1</td><td>InsertUnit                         </td><td>921202001012060240</td><td>UnitCode created by PLC/Historian for PLCCode [1532BCES_48_96].</td></tr>
+			<tr><td>414852</td><td>02:48.2</td><td>1</td><td>1</td><td>PLCProduction_RemovePrintedUnitCode</td><td>921202001012060240</td><td>UnitCode has been printed and removed from PLCProductionQueue.</td></tr>
+		  </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="NBInOutEntryModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">NBInOutEntry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+	    <p>As records are processed by </p>
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample Value</th></tr>
+          </thead>
+          <tbody>
+			<tr><td>NBInOutEntryID</td><td>Unique table ID</td><td>21340</td></tr>
+			<tr><td>MESID</td><td>not used</td><td></td></tr>
+			<tr><td>StationID</td><td>always 2</td><td>2</td></tr>
+			<tr><td>ProductID</td><td>JDE Product_Width_Length</td><td>1362246_48_96</td></tr>
+			<tr><td>ProductionOrderID</td><td>not used</td><td></td></tr>
+			<tr><td>InOutFlag</td><td>not used</td><td></td></tr>
+			<tr><td>Pieces</td><td>Pcs/Pkg (redundant?)</td><td>68</td></tr>
+			<tr><td>StatusID</td><td></td><td>13</td></tr>
+			<tr><td>UnitCode</td><td>not used</td><td>NULL</td></tr>
+			<tr><td>UpdatedOn</td><td></td><td>11/22/24 4:14 PM</td></tr>
+			<tr><td>Comment</td><td>not used</td><td>NULL</td></tr>
+			<tr><td>NBInOutEntryDate</td><td></td><td>11/22/24 4:14 PM</td></tr>
+			<tr><td>OutFeed</td><td>not used</td><td>NULL</td></tr>
+			<tr><td></td></tr>
+		  </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="PLCWeightsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWeights</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample</th></tr>
+          </thead>
+          <tbody>
+<tr><td>PLCWeightID</td><td>Unique table ID</td><td>2113</td></tr>
+<tr><td>Weight</td><td>Not always provided</td><td>100</td></tr>
+<tr><td>Width</td><td>Product Width</td><td>48</td></tr>
+<tr><td>Length</td><td>Product Length</td><td>96</td></tr>
+<tr><td>ModifiedDate</td><td>date created</td><td>11/20/24 12:09 PM</td></tr>
+<tr><td>FinishingLineID</td><td>1 record per finishing line<br>field doesn't always exist</td><td>1</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="StaplerDataModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">StaplerData</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>DateTimeStamp</th><th>BarCode (JDE Product)</th><th>Weight</th></tr>
+          </thead>
+          <tbody>
+<tr><td>12/1/24 10:15 PM</td><td>1362463</td><td>1712</td></tr>
+<tr><td>12/1/24 10:09 PM</td><td>1362463</td><td>1703</td></tr>
+<tr><td>12/1/24 10:02 PM</td><td>1362463</td><td>1716</td></tr>
+<tr><td>12/1/24 9:56 PM</td><td>1362463</td><td>1715</td></tr>
+<tr><td>12/1/24 9:46 PM</td><td>1362737</td><td>0</td></tr>
+<tr><td>12/1/24 9:44 PM</td><td>1362463</td><td>1724</td></tr>
+<tr><td>12/1/24 9:42 PM</td><td>1362463</td><td>1714</td></tr>
+<tr><td>12/1/24 9:37 PM</td><td>1362463</td><td>1715</td></tr>
+<tr><td>12/1/24 9:34 PM</td><td>1362463</td><td>1717</td></tr>
+<tr><td>12/1/24 9:33 PM</td><td>1362463</td><td>1705</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="ProductionModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Production Data</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><td>ProductionID</td><td>Unique Table ID</td><td>2519427</td><td>2084015</td></tr>
+<tr><td>UnitCode</td><td>Unique Unit Code representing this unit</td><td>761202412022030244</td><td>921202412022041433</td></tr>
+<tr><td>ProductionFinishedDateTime</td><td></td><td>2024-12-01 22:02:44.060</td><td>2024-12-01 22:14:32.993</td></tr>
+<tr><td>ProductionFinishedUTCDateTime</td><td></td><td>2024-12-02 03:02:44.070</td><td>2024-12-02 04:14:32.993</td></tr>
+<tr><td>ProductionDate</td><td></td><td>2024-12-01 22:02:44.060</td><td>2024-12-01 22:14:32.993</td></tr>
+<tr><td>ProductionStatusID</td><td>Status Code (see all statuses)</td><td>4</td><td>1</td></tr>
+<tr><td>ProductionTypeID</td><td>0 = Produced from WIP, 1 = Produced from BIN</td><td>1</td><td>1</td></tr>
+<tr><td>ProductCode</td><td>JDE Product Code</td><td>1362194     </td><td>1362246     </td></tr>
+<tr><td>ProductDesc</td><td></td><td>25/64 Reject</td><td>7/16 CAT Trubord BC</td></tr>
+<tr><td>ProductTypeCode</td><td></td><td>OS</td><td>OS</td></tr>
+<tr><td>PiecesPerPackage</td><td></td><td>82</td><td>68</td></tr>
+<tr><td>Length</td><td></td><td>96      </td><td>96      </td></tr>
+<tr><td>Width</td><td></td><td>54      </td><td>48      </td></tr>
+<tr><td>Thickness</td><td></td><td>25/64                              </td><td>7/16                               </td></tr>
+<tr><td>ThicknessCode</td><td></td><td>2564    </td><td>0716    </td></tr>
+<tr><td>Thickness_Width_UOM</td><td></td><td></td><td>NULL</td></tr>
+<tr><td>NominalWidth</td><td>No longer used</td><td>0.000</td><td>0.000</td></tr>
+<tr><td>ConstructionCode</td><td></td><td>S       </td><td>S       </td></tr>
+<tr><td>ConstructionDesc</td><td></td><td>SE                                 </td><td>SE                                 </td></tr>
+<tr><td>GradeCode</td><td></td><td>N       </td><td>A       </td></tr>
+<tr><td>GradeDesc</td><td></td><td>Non Certified                      </td><td>APA                                </td></tr>
+<tr><td>FinishCode</td><td></td><td>        </td><td>        </td></tr>
+<tr><td>FinishDesc</td><td></td><td>                                   </td><td>                                   </td></tr>
+<tr><td>Weight</td><td></td><td>3381.08960</td><td>3413.41708</td></tr>
+<tr><td>EstimatedWeight</td><td></td><td>3381.08960</td><td>3413.41708</td></tr>
+<tr><td>WeightUOM</td><td></td><td></td><td>NULL</td></tr>
+<tr><td>GTIN</td><td>If maintained in JDE</td><td></td><td>776391200007  </td></tr>
+<tr><td>UPC</td><td>If maintained in JDE</td><td></td><td>776391200007  </td></tr>
+<tr><td>ShiftID</td><td></td><td>2</td><td>2</td></tr>
+<tr><td>FinishingLineID</td><td></td><td>1</td><td>1</td></tr>
+<tr><td>IsOfflinePrint</td><td>0 = Label Desktop in automated mode, 1 = Manual</td><td>1</td><td>0</td></tr>
+<tr><td>TransactionID</td><td>From Transaction table</td><td>252280</td><td>0</td></tr>
+<tr><td>ModifiedByUserFullName</td><td></td><td>Felix Morin</td><td>System</td></tr>
+<tr><td>ModifiedDate</td><td></td><td>2024-12-01 22:24:26.417</td><td>2024-12-01 22:14:37.033</td></tr>
+<tr><td>InventoryBalanceCheck</td><td></td><td>1</td><td>0</td></tr>
+<tr><td>UnitTypeID</td><td>0 = WIP, 1 = Finished</td><td>1</td><td>1</td></tr>
+<tr><td>VerifiedDate</td><td></td><td>2024-12-01 22:24:01.193</td><td>NULL</td></tr>
+<tr><td>VerifiedBy</td><td></td><td>Felix Morin</td><td>NULL</td></tr>
+<tr><td>IsProductChange</td><td></td><td>0</td><td>0</td></tr>
+<tr><td>ProductionLineID</td><td></td><td>1</td><td>2</td></tr>
+<tr><td>ProductionModeID</td><td></td><td>0</td><td>1</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="ProductionStatusModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Production Status</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+	    <p>As records are processed by </p>
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>ProductionStatusID</th><th>ProductionStatusName</th><th>ProductionStatusDescription</th><th>ModifiedBy</th><th>ModifiedDate</th><th>ModifiedTimeStamp</th></tr>
+          </thead>
+          <tbody>
+<tr><td>-3</td><td>InactiveNonVerified</td><td>NULL</td><td>Callon</td><td>2005-03-24 00:00:00.000</td><td>0x0000000000159B5B</td></tr>
+<tr><td>-2</td><td>Unknown</td><td>NULL</td><td>Callon</td><td>2004-12-13 00:00:00.000</td><td>0x000000000014ED88</td></tr>
+<tr><td>-1</td><td>Invalid</td><td>NULL</td><td>Callon</td><td>2004-03-18 00:00:00.000</td><td>0x000000000002E79B</td></tr>
+<tr><td>0</td><td>Production</td><td>NULL</td><td>Callon</td><td>2004-03-18 00:00:00.000</td><td>0x000000000002E79C</td></tr>
+<tr><td>1</td><td>Strapline</td><td>NULL</td><td>Callon</td><td>2004-03-18 00:00:00.000</td><td>0x000000000002E79D</td></tr>
+<tr><td>2</td><td>Finished</td><td>NULL</td><td>Callon</td><td>2004-03-18 00:00:00.000</td><td>0x000000000002E79E</td></tr>
+<tr><td>3</td><td>Picked</td><td>NULL</td><td>Callon</td><td>2004-03-18 00:00:00.000</td><td>0x000000000002E79F</td></tr>
+<tr><td>4</td><td>Inventory</td><td>NULL</td><td>Callon</td><td>2004-03-18 00:00:00.000</td><td>0x000000000002E7A0</td></tr>
+<tr><td>5</td><td>Shipping</td><td>NULL</td><td>Callon</td><td>2004-11-01 00:00:00.000</td><td>0x000000000013D27C</td></tr>
+<tr><td>6</td><td>Shipped</td><td>NULL</td><td>Callon</td><td>2004-11-01 00:00:00.000</td><td>0x000000000013D27B</td></tr>
+<tr><td>7</td><td>Invoiced</td><td>NULL</td><td>Callon</td><td>2004-11-01 00:00:00.000</td><td>0x000000000013D27A</td></tr>
+<tr><td>8</td><td>Q.C. Lab</td><td>NULL</td><td>Callon</td><td>2004-11-01 00:00:00.000</td><td>0x000000000013D279</td></tr>
+<tr><td>9</td><td>Work in Progress</td><td>NULL</td><td>Callon</td><td>2004-11-01 00:00:00.000</td><td>0x000000000013D26F</td></tr>
+<tr><td>10</td><td>Product Change</td><td>NULL</td><td>Callon</td><td>2004-12-01 00:00:00.000</td><td>0x000000000015644F</td></tr>
+<tr><td>11</td><td>WIPConsumed</td><td>NULL</td><td>Callon</td><td>2005-04-01 00:00:00.000</td><td>0x000000000015DFC1</td></tr>
+<tr><td>12</td><td>WIPConsumedT&G</td><td>NULL</td><td>Callon</td><td>2007-03-16 14:00:33.000</td><td>0x00000000006B58DB</td></tr></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="InventoryModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Inventory Data</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample</th></tr>
+          </thead>
+          <tbody>
+<tr><td>InventoryID</td><td>Unique Inventory ID</td><td>1980158</td></tr>
+<tr><td>LocationID</td><td>warehouse Location ID</td><td>42</td></tr>
+<tr><td>UnitCode</td><td>Unit Code from production</td><td>921202412022044205</td></tr>
+<tr><td>GTIN</td><td>if maintained in JDE</td><td>NULL</td></tr>
+<tr><td>MovementUserFullName</td><td>User who moved it here</td><td>Dexter Monroe</td></tr>
+<tr><td>MovementDate</td><td>last date if was moved</td><td>2024-12-01 22:48:58.057</td></tr>
+<tr><td>InventoryBalanceCheck</td><td></td><td>1</td></tr>
+<tr><td>InventoryBalanceOperatorFullName</td><td></td><td>NULL</td></tr>
+<tr><td>InventoryBalanceDate</td><td></td><td>NULL</td></tr>
+<tr><td>PutawayDate</td><td>Original Inventory Putaway Date</td><td>2024-12-01 22:48:58.057</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="ProductsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Product Data (from JDE)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><td>ProductTypeCode</td><td>OS</td><td>OS</td></tr>
+<tr><td>ProductTypeDscr</td><td>ORIENTED STRAND BOARD                   </td><td>ORIENTED STRAND BOARD                   </td></tr>
+<tr><td>ProductCode</td><td>1362000             </td><td>1362001             </td></tr>
+<tr><td>ProductDscr</td><td>1/2 CAT Trubord                                                                                                         </td><td>1/2 CAT Trubord BC                                                                                                      </td></tr>
+<tr><td>LocationCode</td><td>81  </td><td>92  </td></tr>
+<tr><td>WidthCode</td><td>48      </td><td>48      </td></tr>
+<tr><td>LengthCode</td><td>96      </td><td>96      </td></tr>
+<tr><td>PiecesPerPackage</td><td>58    </td><td>58    </td></tr>
+<tr><td>EstimatedWeight</td><td>54.29885   </td><td>60.14426   </td></tr>
+<tr><td>ProductQuota</td><td>N  </td><td>N  </td></tr>
+<tr><td>ConstructionCode</td><td>S                   </td><td>S                   </td></tr>
+<tr><td>ConstructionDscr</td><td>SE                                 </td><td>SE                                 </td></tr>
+<tr><td>GradeCode</td><td>A                   </td><td>A                   </td></tr>
+<tr><td>GradeDscr</td><td>APA                                     </td><td>APA                                     </td></tr>
+<tr><td>ThicknessCode</td><td>0102                </td><td>0102                </td></tr>
+<tr><td>ThicknessDscr</td><td>1/2                                </td><td>1/2                                </td></tr>
+<tr><td>FinishCode</td><td>                    </td><td>                    </td></tr>
+<tr><td>FinishDscr</td><td>                                   </td><td>                                   </td></tr>
+<tr><td>GroupCode</td><td>                    </td><td>                    </td></tr>
+<tr><td>GroupDscr</td><td>Blank                                   </td><td>Blank                                   </td></tr>
+<tr><td>VolumeUnitCode</td><td>M6  </td><td>M6  </td></tr>
+<tr><td>VolumeUnitDscr</td><td>M16                                </td><td>M16                                </td></tr>
+<tr><td>Thickness_Width_UOM</td><td>IN  </td><td>IN  </td></tr>
+<tr><td>Domestic_HarmonizedCode</td><td>4410120010    </td><td>4410120010    </td></tr>
+<tr><td>PriceClass</td><td>OSB     </td><td>OSB     </td></tr>
+<tr><td>FreightClass</td><td>OSB   </td><td>OSB   </td></tr>
+<tr><td>ProductCateCode</td><td>SS      </td><td>SS      </td></tr>
+<tr><td>ProductCateDscr</td><td>SHEATHING                          </td><td>SHEATHING                          </td></tr>
+<tr><td>Nom_Width</td><td>NULL</td><td>NULL</td></tr>
+<tr><td>UPC</td><td></td><td>776391300004</td></tr>
+<tr><td>GTIN</td><td> </td><td>776391300004</td></tr>
+<tr><td>ActiveProduct</td><td>Y </td><td>Y </td></tr>
+<tr><td>UniqueCode</td><td>1362000</td><td>1362001</td></tr>
+<tr><td>AreaSQM</td><td>32.0000000000</td><td>32.0000000000</td></tr>
+<tr><td>VolumeM16</td><td>0.2559997000</td><td>0.2559997000</td></tr>
+<tr><td>VolumeCBM</td><td>0.0377558000</td><td>0.0377558000</td></tr>
+<tr><td>WIPProductCode</td><td>            </td><td>1384000     </td></tr>
+<tr><td>LabelThickness</td><td>            </td><td>            </td></tr>
+<tr><td>HotBoardFlag</td><td>YES</td><td>YES</td></tr>
+<tr><td>WidthNom</td><td>IN  </td><td>IN  </td></tr>
+<tr><td>LengthNom</td><td>IN  </td><td>IN  </td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="PLCWIPProductsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWIPProducts</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><td>PLCWIPProductID</td><td>3</td><td>4</td></tr>
+<tr><td>ThicknessCode</td><td>1532</td><td>1932</td></tr>
+<tr><td>Thickness</td><td>0.469</td><td>0.594</td></tr>
+<tr><td>Width</td><td>48</td><td>48</td></tr>
+<tr><td>Length</td><td>96</td><td>96</td></tr>
+<tr><td>PiecesPerPackage</td><td>1</td><td>1</td></tr>
+<tr><td>GradeCode</td><td>        </td><td>        </td></tr>
+<tr><td>ConstructionCode</td><td>S     </td><td>S     </td></tr>
+<tr><td>FinishCode</td><td>        </td><td>        </td></tr>
+<tr><td>ProductCode</td><td>1384106</td><td>1384116</td></tr>
+<tr><td>PLCCode</td><td>15</td><td>19</td></tr>
+<tr><td>UnitMeasureCode</td><td>IN </td><td>IN </td></tr>
+<tr><td>ProductTypeCode</td><td>OS</td><td>OS</td></tr>
+
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="PLCWIPBucketsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWIPBucketsModal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>PLCCode</th><th>WIPBucket</th><th>ThicknessCode</th></tr>
+          </thead>
+          <tbody>
+<tr><td>4</td><td>4</td><td>0104</td></tr>
+<tr><td>5</td><td>5</td><td>0508</td></tr>
+<tr><td>7</td><td>7</td><td>0716</td></tr>
+<tr><td>15</td><td>15</td><td>1532</td></tr>
+<tr><td>16</td><td>16</td><td>0102</td></tr>
+<tr><td>18</td><td>18</td><td>0304</td></tr>
+<tr><td>19</td><td>19</td><td>1932</td></tr>
+<tr><td>20</td><td>19</td><td>1932</td></tr>
+<tr><td>21</td><td>21</td><td>2332</td></tr>
+<tr><td>22</td><td>21</td><td>2332</td></tr>
+<tr><td>23</td><td>23</td><td>10108</td></tr>
+<tr><td>24</td><td>24</td><td>1000</td></tr>
+<tr><td>25</td><td>21</td><td>2332</td></tr>
+<tr><td>26</td><td>21</td><td>2332</td></tr>
+<tr><td>27</td><td>21</td><td>2332</td></tr>
+<tr><td>78</td><td>7</td><td>0716</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="ProductionLineModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">ProductionLine</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>ProductionLineID</th><th>ProductionLineName</th><th>ContinueousPress</th><th>PressOpenings</th><th>PanelsPerPressOpening</th></tr>
+          </thead>
+          <tbody>
+<tr><th>ProductionLineID</th><th>ProductionLineName</th><th>ContinueousPress</th><th>PressOpenings</th><th>PanelsPerPressOpening</th></tr>
+<tr><td>1</td><td>Production Line 1</td><td>0</td><td>14</td><td>6</td></tr>
+<tr><td>2</td><td>Production Line 2</td><td>0</td><td>NULL</td><td>NULL</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="PLCWIPProducedPiecesModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWIPProducedPieces</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><th>PLCWIPProducedPieceID</th><th>WIPPieceCount</th><th>PLCWIPProductID</th><th>ProductionLineID</th><th>ModifiedDate</th><th>LastTransactionWIPPieceCount</th></tr>
+<tr><td>1</td><td>0</td><td>1</td><td>1</td><td>8/9/22 9:13 AM</td><td>0</td></tr>
+<tr><td>2</td><td>0</td><td>5</td><td>1</td><td>8/22/24 2:27 PM</td><td>0</td></tr>
+<tr><td>3</td><td>5984</td><td>3</td><td>2</td><td>11/22/24 4:00 PM</td><td>6024</td></tr>
+<tr><td>4</td><td>0</td><td>3</td><td>1</td><td>8/23/24 10:14 AM</td><td>0</td></tr>
+<tr><td>6</td><td>0</td><td>7</td><td>1</td><td>6/22/23 7:31 AM</td><td>0</td></tr>
+<tr><td>7</td><td>0</td><td>8</td><td>1</td><td>2/26/24 4:29 PM</td><td>0</td></tr>
+<tr><td>8</td><td>1225</td><td>6</td><td>2</td><td>11/21/24 10:57 AM</td><td>1225</td></tr>
+<tr><td>9</td><td>0</td><td>9</td><td>1</td><td>1/28/21 3:01 PM</td><td>0</td></tr>
+<tr><td>10</td><td>1826</td><td>7</td><td>2</td><td>11/21/24 4:07 PM</td><td>1826</td></tr>
+<tr><td>11</td><td>0</td><td>6</td><td>1</td><td>9/19/24 7:42 AM</td><td>0</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="PLCWIPProcessLogModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWIPProcessLog</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><th>PLCWIPProcessLogID</th><th>PLCWIPProductID</th><th>ProductionLineID</th><th>PieceAdjustmentValue</th><th>PLCWIPProcess_AdjustmentTypeID</th><th>Adjustmenthate</th><th>Comment</th></tr>
+<tr><td>9377550</td><td>3</td><td>2</td><td>-68</td><td>2</td><td>03:20.3</td><td>Pieces removed for Finished Product [1362246], UnitCode [912202411221205853].</td></tr>
+<tr><td>9377549</td><td>3</td><td>2</td><td>-68</td><td>2</td><td>03:19.0</td><td>Pieces removed for Finished Product [1362246], UnitCode [912202411221204148].</td></tr>
+<tr><td>9377548</td><td>3</td><td>2</td><td>96</td><td>0</td><td>00:58.8</td><td>Pieces added.</td></tr>
+<tr><td>9377547</td><td>3</td><td>2</td><td>-68</td><td>2</td><td>00:28.0</td><td>Pieces removed for Finished Product [1362246], UnitCode [912202411221205305].</td></tr>
+<tr><td>9377546</td><td>3</td><td>2</td><td>-68</td><td>2</td><td>00:26.1</td><td>Pieces removed for Finished Product [1362246], UnitCode [912202411221204627].</td></tr>
+<tr><td>9377545</td><td>3</td><td>2</td><td>-412</td><td>3</td><td>00:03.4</td><td>Pieces sent to Sonic.</td></tr>
+<tr><td>9377544</td><td>3</td><td>2</td><td>96</td><td>0</td><td>56:38.8</td><td>Pieces added.</td></tr>
+<tr><td>9377543</td><td>3</td><td>2</td><td>-66</td><td>2</td><td>55:15.6</td><td>Pieces removed for Finished Product [1362347], UnitCode [912202411221205500].</td></tr>
+<tr><td>9377542</td><td>3</td><td>2</td><td>-66</td><td>2</td><td>55:13.6</td><td>Pieces removed for Finished Product [1362347], UnitCode [912202411221205458].</td></tr>
+<tr><td>9377541</td><td>3</td><td>2</td><td>96</td><td>0</td><td>52:19.0</td><td>Pieces added.</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="PLCWIPTransactionDetailsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWIPTransactionDetails</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><th>PLCWIPTransactionID</th><th>TransactionID</th><th>PLCWIPPieceCount</th><th>PLCWIPProductID</th><th>ProductionLineID</th><th>ModifiedDate</th><th>LastTransactionWIPPieceCount</th></tr>
+<tr><td>118156</td><td>245732</td><td>7176</td><td>3</td><td>1</td><td>11/25/24 9:00 AM</td><td>7184</td></tr>
+<tr><td>118155</td><td>245729</td><td>7184</td><td>3</td><td>1</td><td>11/25/24 8:30 AM</td><td>7076</td></tr>
+<tr><td>118154</td><td>245728</td><td>7076</td><td>3</td><td>1</td><td>11/25/24 8:00 AM</td><td>7558</td></tr>
+<tr><td>118151</td><td>245725</td><td>7558</td><td>3</td><td>1</td><td>11/25/24 7:30 AM</td><td>8950</td></tr>
+<tr><td>118152</td><td>245725</td><td>1107</td><td>5</td><td>1</td><td>11/25/24 7:30 AM</td><td>720</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="PLCWIPMasterPanelAuditModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">PLCWIPMasterPanelAudit</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr><th>Field</th><th>Notes</th><th>Sample 1</th><th>Sample 2</th></tr>
+          </thead>
+          <tbody>
+<tr><th>PLCWIPMasterPanelAuditID</th><th>PLCCode</th><th>ProductSumCount</th><th>ProductionLineID</th><th>AudithateTime</th></tr>
+<tr><td>1493254</td><td>716</td><td>145</td><td>1</td><td>11/23/24 1:58 AM</td></tr>
+<tr><td>1493253</td><td>716</td><td>144</td><td>1</td><td>11/23/24 1:55 AM</td></tr>
+<tr><td>1493252</td><td>716</td><td>143</td><td>1</td><td>11/23/24 1:52 AM</td></tr>
+<tr><td>1493251</td><td>716</td><td>142</td><td>1</td><td>11/23/24 1:49 AM</td></tr>
+<tr><td>1493250</td><td>716</td><td>141</td><td>1</td><td>11/23/24 1:47 AM</td></tr>
+<tr><td>1493249</td><td>716</td><td>140</td><td>1</td><td>11/23/24 1:43 AM</td></tr>
+<tr><td>1493248</td><td>716</td><td>139</td><td>1</td><td>11/23/24 1:41 AM</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="AdjustmentsJDEModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Adjustments to PTDCSQL01 to JDE</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <tr><th>Barcode Field</th><th>Barcode Sample</th><th>MiddleTier Field</th><th>Sample Value</th><th>Reformatting for API</th><th>API Field</th></tr>
+            </tr>
+          </thead>
+          <tbody>
+
+<tr><td>AdjustmentTransactionID</td><td>40886</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>ProductionID</td><td>230878</td><td class=""></td><td>ProductionID</td></tr>
+<tr><td>TransactionID</td><td>252284</td><td>TransactionID</td><td>252284</td><td class=""></td><td>TransactionID</td></tr>
+<tr><td>LocationCode</td><td>76  </td><td>LocationCode</td><td>76  </td><td class=""></td><td>LocationCode</td></tr>
+<tr><td>ProductionDate</td><td>12/01/2024</td><td>ProductionDate</td><td>12/01/2024</td><td>CONVERT(VARCHAR, TRY_CONVERT( DATETIME, ProductionDate), 23)</td><td>ProductionDate</td></tr>
+<tr><td>ProductType</td><td>OS</td><td>ProductType</td><td>OS</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductCode</td><td>1362463     </td><td>ProductCode</td><td>1362463     </td><td class=""></td><td>ProductCode</td></tr>
+<tr><td>Width</td><td>54      </td><td>WidthCode</td><td>54      </td><td class=""></td><td>WidthCode</td></tr>
+<tr><td>Length</td><td>96      </td><td>LengthCode</td><td>96      </td><td class=""></td><td>LengthCode</td></tr>
+<tr><td>PiecesPerPackage</td><td>80</td><td>PPkg</td><td>80</td><td class=""></td><td>PPkg</td></tr>
+<tr><td>Blank1</td><td>NULL</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>Blank2</td><td>NULL</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>PackagesProduced</td><td>NULL</td><td>Not used for Adjustments</td><td>PackagesProduced</td></tr>
+<tr><td>UnitsProduced</td><td>-3</td><td>PackagesAdjusted</td><td>-3</td><td>COALESCE(PackagesAdjusted, 0)</td><td>PackagesAdjusted</td></tr>
+<tr><td>AdjustmentCode</td><td>IT  </td><td>AdjustmentCode</td><td>IT  </td><td>COALESCE(SUBSTRING(dbo.fnTRIM(AdjustmentCode), 1, 2), '')</td><td>AdjustmentCode</td></tr>
+<tr><td>AdjustmentDescription</td><td>NULL</td><td>IsProcessed</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ModifiedDate</td><td>2024-12-02 00:00:18.810</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>ErrorFlag</td><td>0</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>ErrorText</td><td class=""></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>CreatedDate</td><td>2024-12-02 00:00:20.910</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="ProductionJDEModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Production to PTDCSQL01 to JDE</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <tr><th>Barcode Field</th><th>Barcode Sample</th><th>PTDCSQL01 Field </th><th>PTDCSQL01 Sample </th><th>Reformatting</th><th>API Field</th></tr>
+            </tr>
+          </thead>
+         <tbody>
+
+
+<tr><td>ProductionID</td><td>2519438</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>ProductionID</td><td>230877</td><td class=""></td><td>ProductionID</td></tr>
+<tr><td>TransactionID</td><td>252283</td><td>TransactionID</td><td>252283</td><td class=""></td><td>TransactionID</td></tr>
+<tr><td colspan="2" class="bg-secondary">[location is filled by the script]</td><td>LocationCode</td><td>76  </td><td class=""></td><td>LocationCode</td></tr>
+<tr><td>ProductionDate</td><td>2024-12-01 23:44:33.953</td><td>ProductionDate</td><td>12/01/2024</td><td>CONVERT(VARCHAR, TRY_CONVERT( DATETIME, ProductionDate), 23)</td><td>ProductionDate</td></tr>
+<tr><td>ProductTypeCode</td><td>OS</td><td>ProductType</td><td>OS</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductCode</td><td>1362463     </td><td>ProductCode</td><td>1362463     </td><td class=""></td><td>ProductCode</td></tr>
+<tr><td>Width</td><td>54      </td><td>WidthCode</td><td>54      </td><td class=""></td><td>WidthCode</td></tr>
+<tr><td>Length</td><td>96      </td><td>LengthCode</td><td>96      </td><td class=""></td><td>LengthCode</td></tr>
+<tr><td>PiecesPerPackage</td><td>80</td><td>PPkg</td><td>80</td><td class=""></td><td>PPkg</td></tr>
+<tr><td colspan="2" class="bg-secondary">Mill production table = 1 unit per line/record, PTDCSQL01 Production table = summed up by TransactionID + Product</td><td>PackagesProduced</td><td>1</td><td class=""></td><td>PackagesProduced</td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>PackagesAdjusted</td><td>NULL</td><td>Not used for Production</td><td>PackagesAdjusted</td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>AdjustmentCode</td><td>NULL</td><td>Not used for Production</td><td>AdjustmentCode</td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>IsProcessed</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>ErrorFlag</td><td>0</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>ErrorText</td><td class=""></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td class="bg-secondary"></td><td class="bg-secondary"></td><td>CreatedDate</td><td>2024-12-02 00:00:20.130</td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>UnitCode</td><td>761202412022044433</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductionFinishedDateTime</td><td>2024-12-01 23:44:33.953</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductionFinishedUTCDateTime</td><td>2024-12-02 04:44:33.967</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductionStatusID</td><td>4</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductionTypeID</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductDesc</td><td>25/64, 0.3937 Web Reg DZ</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>Thickness</td><td>25/64, 0.3937 IN                   </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ThicknessCode</td><td>3937    </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>Thickness_Width_UOM</td><td class=""></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>NominalWidth</td><td>0.000</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ConstructionCode</td><td>S       </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ConstructionDesc</td><td>SE                                 </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>GradeCode</td><td>A       </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>GradeDesc</td><td>APA                                </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>FinishCode</td><td>        </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>FinishDesc</td><td>                                   </td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>Weight</td><td>3914.21040</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>EstimatedWeight</td><td>3914.21040</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>WeightUOM</td><td class=""></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>GTIN</td><td class=""></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>UPC</td><td class=""></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ShiftID</td><td>2</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>FinishingLineID</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>IsOfflinePrint</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ModifiedByUserFullName</td><td>Mathieu east</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ModifiedDate</td><td>2024-12-01 23:56:25.393</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>InventoryBalanceCheck</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>UnitTypeID</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>VerifiedDate</td><td>2024-12-01 23:56:22.970</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>VerifiedBy</td><td>Mathieu east</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>IsProductChange</td><td>0</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductionLineID</td><td>1</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+<tr><td>ProductionModeID</td><td>0</td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td><td class="bg-secondary"></td></tr>
+
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="STHeaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Stock Transfer Header</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <tr><th>Barcode Field</th><th>Barcode Sample</th><th>PthCSQL01 Field </th><th>PthCSQL01 Sample </th><th>Reformatting</th><th>API Field</th></tr>
+            </tr>
+          </thead>
+          <tbody>
+
+<tr><td>StockTransferID</td><td>StockTransferDate</td><td>StockTransferStatusID</td></tr>
+<tr><td>177</td><td>2024-11-07 14:34:32.203</td><td>2</td></tr>
+<tr><td>176</td><td>2024-11-07 14:06:48.230</td><td>2</td></tr>
+<tr><td>175</td><td>2024-11-06 13:29:28.817</td><td>2</td></tr>
+<tr><td>174</td><td>2024-11-06 13:10:19.800</td><td>2</td></tr>
+<tr><td>173</td><td>2024-11-01 07:04:33.993</td><td>2</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade" id="STUnitJDEModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Stock Transfer Units</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <tr><th>Barcode Field</th><th>Barcode Sample</th><th>PthCSQL01 Field </th><th>PthCSQL01 Sample </th><th>Reformatting</th><th>API Field</th></tr>
+            </tr>
+          </thead>
+          <tbody>
+
+<tr><td>StockTransferUnitID</td><td>StockTransferID</td><td>UnitCode</td><td>ProductCode</td><td>Width</td><td>Length</td><td>PiecesPerPackage</td><td>UserID</td><td>AddedDateTime</td><td>ProductTypeCode</td><td>TransactionID</td><td>LineNumber</td></tr>
+<tr><td>1877</td><td>177</td><td>931202411071203622</td><td>1362726     </td><td>48</td><td>96</td><td>42</td><td>70</td><td>2024-11-07 14:45:28.020</td><td>OS</td><td>452842</td><td>1</td></tr>
+<tr><td>1876</td><td>177</td><td>931202411071203619</td><td>1362726     </td><td>48</td><td>96</td><td>42</td><td>70</td><td>2024-11-07 14:45:25.907</td><td>OS</td><td>452842</td><td>1</td></tr>
+<tr><td>1875</td><td>177</td><td>931202411062030234</td><td>1362590     </td><td>48</td><td>96</td><td>48</td><td>70</td><td>2024-11-07 14:35:07.497</td><td>OS</td><td>452842</td><td>1</td></tr>
+<tr><td>1874</td><td>177</td><td>931202411051231531</td><td>1362590     </td><td>48</td><td>96</td><td>48</td><td>70</td><td>2024-11-07 14:35:00.277</td><td>OS</td><td>452842</td><td>1</td></tr>
+<tr><td>1873</td><td>177</td><td>931202411062040000</td><td>1362590     </td><td>48</td><td>96</td><td>48</td><td>70</td><td>2024-11-07 14:34:58.983</td><td>OS</td><td>452842</td><td>1</td></tr>
+<tr><td>1872</td><td>177</td><td>931202410191214146</td><td>1362590     </td><td>48</td><td>96</td><td>48</td><td>70</td><td>2024-11-07 14:34:56.463</td><td>OS</td><td>452842</td><td>1</td></tr>
+<tr><td>1871</td><td>177</td><td>931202411051231735</td><td>1362590     </td><td>48</td><td>96</td><td>48</td><td>70</td><td>2024-11-07 14:34:54.887</td><td>OS</td><td>452842</td><td>1</td></tr>
+</tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal fade " id="imagemodal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <img class="modal-img" />
+            </div>
+        </div>
+    </div>
+
+<script>
+	  $(function() {
+        options = {
+			items:'#content',
+			position: 'fon-top-right',
+			theme: 'fon-dark',
+			/* title: 'Preset 4', */
+			top: true,
+			transition: 'slide',
+			scroll: 0,
+			
+			smart: {
+				enable: true,
+				anchors: true,
+				close: true,
+				open: false,
+				remember: true,
+				scroll: true,
+			}
+		};
+		FooNav.init(options).ready(function(nav){
+			nav.toggle();
+		});
+
+		var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+		var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+		  return new bootstrap.Popover(popoverTriggerEl)
+		})
+		var popover = new bootstrap.Popover(document.querySelector('.popover-dismiss'), {
+		  trigger: 'focus'
+		})
+		
+        
+      });
+	  // basic
+	  $(document).ready(function() {
+		$(".imageLink").on("click",function(){
+		  var src = $(this).attr("data-img");
+		  $(".modal-img").prop("src",src);
+	    });
+	  });
+	  
+	</script>
+
+    
+  </body>
+</html>
