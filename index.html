@@ -210,35 +210,25 @@
 		<div class="row d-flex align-items-center bg-light border p-2">
 		  <p><strong>Requirements</strong> 
 		  <ol>
-		    <li>Ability to scan units using a handheld scanning device</li>
-			<li>Ability to move units to various locations within the warehouse and track the movement</li>
+		    <li>Ability to create warehouse locations</li>
+		    <li>Ability to scan units using a handheld device to verify production</li>
+			<li>Ability to store inventory by scanning a unit and then scanning an inventory location</li>
 		  </ol>		  
 		  </p>
 		  <p><strong>Current Solution:</strong> 
 		  <ol>
-		    <li>Handheld devices running custom code on a Windows CE OS are currently used (physical keyboard on the device)</li>
-		    <li></li>
-			<li>When automated mode is turned off, or for mills that do not have PLC Integration, the <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/LabelDesktop.png">Label Desktop presents users with a form</a> 
-			to select product attributes and print a label</li>
-			<li>When manually selecting attributes, the Label Desktop allows the user to create production only (no label) or create a label only (no production)</li>
-			<li>When a label is printed, either automatically or manually (with production) a <a data-bs-toggle="modal" href="#ProductionModal">Production</a> entry is created <br>
-			At this point, the production entry remains unverified and the <a data-bs-toggle="modal" href="#ProductionStatusModal">Production Status</a> is still 1</li>
-			<li>WIP is reduced based on the setup linking JDE Products to WIP Products. This is currently accomplished using a few tables:
-			  <ol type="a">
-			    <li><a data-bs-toggle="modal" href="#ProductsModal">Products</a> - in JDE WIP products are created and Finished Products are then given a WIPProductCode</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPProductsModal">PLCWIPProducts</a> - on the WMS side, a unique WIPProductID links a PLCCode to the JDE WipProductCode</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPBucketsModal">PLCWIPBuckets</a> - Sometimes a product may not have a WIPProductCode so the thickness is linked to a PLCCode in this table. This only works when looking up the 
-		      PLCCode using the final Product</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPProducedPiecesModal">PLCWIPProducedPieces</a> - This is the "Inventory" or total number of WIP for each PLCWIPProductID</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPProcessLogModal">PLCWIPProcessLog</a> - An audit history of adding or removing WIP to the table above (with adjustment codes to show where it came from)</li>				
-			  </ol>
-			</li>
+		    <li>Warehouse locations are created in the database and a large barcode label is hung over the physical area</li>
+		    <li>At the end of the production line, after a label is printed, the production entry is unverified. 
+			    Scanning it with a handheld device verifies the production (and records which user scanned it, and when)</li>
+			<li>Currently, after verifying production, the unit is moved to a warehouse location and the location barcode is scanned.
+			    This creates an inventory record #TODO# (inventory table) in the database, linking that unit to a particular inventory location</li>
 		  </ol>
 		  </p>		  
 		  <p><strong>Limitations:</strong> 
 		  <ul>
 		    <li>#TODO# Any?</li>
-		  </ul>		  </p>
+		  </ul>		  
+		  </p>
 		</div>
 		<h1>Inventory Management</h1>
 		<div class="row d-flex align-items-center p-2">
@@ -268,23 +258,36 @@
 		  </p>
 		  <p><strong>Current Solution:</strong> 
 		  <ol>
-		    <li>Handheld devices running custom code on a Windows CE OS are currently used (physical keyboard on the device)</li>
-		    <li></li>
-			<li>When automated mode is turned off, or for mills that do not have PLC Integration, the <a data-bs-toggle="modal" class="imageLink" href="#imagemodal" data-img="images/LabelDesktop.png">Label Desktop presents users with a form</a> 
-			to select product attributes and print a label</li>
-			<li>When manually selecting attributes, the Label Desktop allows the user to create production only (no label) or create a label only (no production)</li>
-			<li>When a label is printed, either automatically or manually (with production) a <a data-bs-toggle="modal" href="#ProductionModal">Production</a> entry is created <br>
-			At this point, the production entry remains unverified and the <a data-bs-toggle="modal" href="#ProductionStatusModal">Production Status</a> is still 1</li>
-			<li>WIP is reduced based on the setup linking JDE Products to WIP Products. This is currently accomplished using a few tables:
+		    <li>If required, production labels can be printed from the handheld device 
+			    (this is different from reprinting a label since this creates a production record)</li>
+			<li>After a production label is created, it must be verified. There is a specific menu option on the handheld for this.</li>
+			<li>If a new label is needed, a "Print Missing Unit Label" is available which allows the user to
 			  <ol type="a">
-			    <li><a data-bs-toggle="modal" href="#ProductsModal">Products</a> - in JDE WIP products are created and Finished Products are then given a WIPProductCode</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPProductsModal">PLCWIPProducts</a> - on the WMS side, a unique WIPProductID links a PLCCode to the JDE WipProductCode</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPBucketsModal">PLCWIPBuckets</a> - Sometimes a product may not have a WIPProductCode so the thickness is linked to a PLCCode in this table. This only works when looking up the 
-		      PLCCode using the final Product</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPProducedPiecesModal">PLCWIPProducedPieces</a> - This is the "Inventory" or total number of WIP for each PLCWIPProductID</li>
-				<li><a data-bs-toggle="modal" href="#PLCWIPProcessLogModal">PLCWIPProcessLog</a> - An audit history of adding or removing WIP to the table above (with adjustment codes to show where it came from)</li>				
+			    <li>scan (or enter) an existing unit code and clone it</li>
+				<li>select a unit code from the history of labels scanned</li>
+				<li>select product attributes and print a label 
+				    (NOTE: In this option, the pieces per package can be changed before printing a label)
+					#TODO# - is this still possible, given that this would switch the product?</li>
 			  </ol>
+			  Once any of the above are done a warning message appears making sure that the user knows they are RE printing a Label
+			  and that if they want to create a production label they should use the production menu instead
 			</li>
+			<li>An "inventory Movement" option exists on the handheld. When selected, a unit can be scanned and a 
+			    new location can then be scanned. This would update the inventory table with the new location #TODO# (update or new record)</li>
+			<li>A Product Change menu option exists. When selected, a unit can be scanned or manually entered.
+			    <br>Product attributes can be then be modified. The handheld then shows a comparison of old and new attributes.
+				<br>Once confirmed, a new unit code is created (in the Inventory Table), the old one is invalidated (and linked to the new unit code for audit purposes)
+				<br>Finally, an Adjustment record is created to reduce the previous product's inventory and increase the new one</li>
+			<li>A product can be invalidated by selecting the menu option and scanning/entering the unit code
+			    <br>This creates an adjustment to decrease inventory of this product Code
+				<br>If necessary, the WIP cloud of the related product is also increased</li>
+			<li>Physical counts are performed at differing intervals based on mill. During this process, units are scanned and the totals are compared.
+			    <br>During the process, any items unverified or not put away (location code is 0) can be fixed
+				<br>At the end, any discrepancies can be corrected using adjustments</li>
+			<li>A stock transfer menu option exists. If selected, multiple units can be scanned and transferred.
+			    <br>This removes the inventory from the system and creates an adjustment of type "ST"
+				<br>Since Virtual Reload inventory is not barcoded, the rest of the movement 
+				(creating inventory at the reload location) is handled in JDE when processing the adjustment</li>
 		  </ol>
 		  </p>		  
 		  <p><strong>Limitations:</strong> 
